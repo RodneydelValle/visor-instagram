@@ -63,6 +63,9 @@ def on_img(route):
     route.fulfill(status=200 if u in store else 404, headers=h, content_type='image/jpeg', body=store.get(u, b''))
 
 def preparar(ctx, dialogs):
+    # modo Local para estas pruebas (Grupal se prueba aparte, con Firebase real)
+    ctx.add_init_script("try{const u=JSON.parse(localStorage.getItem('visor-ui')||'{}');if(!u.espacio){u.espacio='local';localStorage.setItem('visor-ui',JSON.stringify(u))}}catch(e){}")
+    ctx.route('https://www.gstatic.com/firebasejs/**', lambda r: r.abort())
     ctx.route('https://api.cloudinary.com/**', on_upload)
     ctx.route('https://res.cloudinary.com/**', on_img)
     return nueva_pagina(ctx, dialogs)

@@ -148,19 +148,41 @@ textarea{resize:vertical;min-height:60px}
 .sec details{margin:10px 0 0}
 .sec details summary{padding:8px 10px;font-weight:500;font-size:13px}
 .btn.pend::after{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:#ffb020;margin-left:7px;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6)}
+.barra{position:sticky;top:0;z-index:16;display:flex;align-items:center;gap:14px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.marca{font-weight:800;font-size:16px;letter-spacing:.2px}
+.espacio{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:var(--chip);border:1px solid var(--line)}
+.espacio button{border:0;background:transparent;color:var(--muted);padding:9px 22px;border-radius:999px;font-weight:700;font-size:15px;cursor:pointer}
+.espacio button:hover{color:var(--ink)}
+#espLocal.on{background:#3a5bd9;color:#fff;box-shadow:0 2px 10px rgba(58,91,217,.35)}
+#espGrupal.on{background:#139a55;color:#fff;box-shadow:0 2px 10px rgba(19,154,85,.35)}
+.espEstado{flex:1;min-width:180px;font-size:13px;color:var(--muted)}
+.espEstado .vivo{color:#139a55;font-weight:700}
+.espEstado .malo{color:var(--danger);font-weight:700}
+#bTheme{margin-left:auto}
+body.grupal .panel{box-shadow:inset 3px 0 0 #139a55}
+.app{position:relative}
+.velo{position:absolute;inset:0;z-index:12;background:rgba(238,240,243,.88);background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:60px 16px}
+.velo .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:540px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.18)}
+.velo h3{margin:0 0 6px;font-size:17px}
+.velo p{color:var(--muted);margin:0 0 14px}
+@media (max-width:860px){.espacio{order:3;width:100%}.espacio button{flex:1}.espEstado{order:4}}
 .hidden{display:none!important}
 </style>
 </head>
 <body>
+<header class="barra">
+  <div class="marca">Visor de Perfil</div>
+  <div class="espacio" role="group" aria-label="Dónde se guarda el perfil">
+    <button id="espLocal" type="button" title="Perfiles que solo están en este navegador">💻 Local</button>
+    <button id="espGrupal" type="button" title="Perfiles del equipo: todos los ven y editan en vivo">👥 Grupal</button>
+  </div>
+  <div class="espEstado" id="espEstado" aria-live="polite"></div>
+  <button class="btn sm" id="bTheme" title="Tema del editor">◐</button>
+</header>
 <div class="app">
   <!-- ======================= PANEL ======================= -->
   <aside class="panel">
-    <div class="brand">
-      <h1>Visor de Perfil</h1>
-      <button class="btn sm" id="bTheme" title="Tema del editor">◐</button>
-    </div>
-
-    <label>Proyecto (cada uno guarda un perfil)</label>
+    <label id="lblProy">Perfiles</label>
     <div class="row">
       <select id="selProj" style="flex:1"></select>
       <button class="btn sm" id="bNewProj">Nuevo</button>
@@ -169,11 +191,12 @@ textarea{resize:vertical;min-height:60px}
       <button class="btn sm dan" id="bDelProj">Borrar</button>
     </div>
     <div class="row" style="margin-top:8px">
+      <button class="btn sm pri" id="bMover">📤 Copiar al equipo</button>
       <button class="btn sm" id="bExport">Exportar archivo</button>
       <button class="btn sm" id="bImport">Importar archivo</button>
       <input type="file" id="fImport" accept=".json,application/json" class="hidden">
     </div>
-    <p class="hint">Lo que haces se guarda en este navegador y las imágenes se suben solas a la nube del equipo. Para mostrarlo, usa <b>Compartir link</b>. También puedes pasar un <b>archivo</b>.</p>
+    <p class="hint" id="hintEsp"></p>
 
     <details id="secNube">
       <summary>Nube del equipo <span id="nubeEstado" class="estado"></span></summary>
@@ -260,6 +283,18 @@ textarea{resize:vertical;min-height:60px}
     </div>
     <div class="frames" id="frames"></div>
   </main>
+  <div class="velo hidden" id="velo" role="dialog" aria-modal="true" aria-labelledby="veloTit">
+    <div class="box">
+      <h3 id="veloTit"></h3>
+      <p id="veloTxt"></p>
+      <div class="row">
+        <button class="btn" id="veloLocal">💻 Ir a Local</button>
+        <button class="btn" id="veloReintentar">Reintentar</button>
+        <button class="btn" id="veloCopiar"></button>
+        <button class="btn pri" id="veloCrear">＋ Crear perfil del equipo</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="modal" id="modal"><div class="post" id="postBox"></div></div>
@@ -303,7 +338,7 @@ const DB = {
   open(){return new Promise((res)=>{try{const r=indexedDB.open('visor-perfil',1);r.onupgradeneeded=()=>r.result.createObjectStore('proy',{keyPath:'id'});r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>res();}catch(e){res()}})},
   all(){return new Promise(res=>{if(!this.db)return res([]);try{const q=this.db.transaction('proy').objectStore('proy').getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])}catch(e){res([])}})},
   get(id){return new Promise(res=>{if(!this.db)return res(null);try{const q=this.db.transaction('proy').objectStore('proy').get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null)}catch(e){res(null)}})},
-  put(p){if(!this.db)return;try{const t=this.db.transaction('proy','readwrite');t.objectStore('proy').put(p);t.oncomplete=()=>{try{canal&&canal.postMessage({tipo:'guardado',id:p.id})}catch(_){}}}catch(e){}},
+  put(p){if(!this.db||p.equipo)return;/* los perfiles del equipo viven en Firebase */try{const t=this.db.transaction('proy','readwrite');t.objectStore('proy').put(p);t.oncomplete=()=>{try{canal&&canal.postMessage({tipo:'guardado',id:p.id})}catch(_){}}}catch(e){}},
   del(id){if(!this.db)return;try{const t=this.db.transaction('proy','readwrite');t.objectStore('proy').delete(id);t.oncomplete=()=>{try{canal&&canal.postMessage({tipo:'borrado',id})}catch(_){}}}catch(e){}},
 };
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
@@ -319,17 +354,17 @@ function nuevoProyecto(nombre){
 }
 
 let proyectos=[], P=null;
-const ui={vista:'propuesta',ratio:'3/4',ph:'light',show:'12',tag:'si'};
-const UI_OK={vista:['actual','propuesta','comparar'],ratio:['3/4','4/5','1/1'],ph:['light','dark'],show:['12','21','all'],tag:['si','no']};
+const ui={vista:'propuesta',ratio:'3/4',ph:'light',show:'12',tag:'si',espacio:'grupal'};
+const UI_OK={vista:['actual','propuesta','comparar'],ratio:['3/4','4/5','1/1'],ph:['light','dark'],show:['12','21','all'],tag:['si','no'],espacio:['local','grupal']};
 function aplicarUI(o){if(!o||typeof o!=='object')return;for(const k in UI_OK){if(UI_OK[k].includes(o[k]))ui[k]=o[k]}}
 try{aplicarUI(JSON.parse(localStorage.getItem('visor-ui')||'{}'))}catch(e){}
 const guardarUI=()=>{try{localStorage.setItem('visor-ui',JSON.stringify(ui))}catch(e){}};
 // guardado con espera corta; recuerda cada proyecto tocado aunque se cambie de proyecto
 const sucios=new Set(); let tGuardar;
-const vaciar=()=>{clearTimeout(tGuardar);sucios.forEach(p=>{if(proyectos.includes(p))DB.put(p)});sucios.clear()};
-const marcar=proj=>{proj.rev=Math.max(Date.now(),(proj.rev||0)+1,(proj.sincRev||0)+1);sucios.add(proj);clearTimeout(tGuardar);tGuardar=setTimeout(vaciar,300);if(proj===P)pintarCompartir()};
+const vaciar=()=>{clearTimeout(tGuardar);sucios.forEach(p=>{if(proyectos.includes(p)&&!p.equipo)DB.put(p)});sucios.clear()};
+const marcar=proj=>{proj.rev=Math.max(Date.now(),(proj.rev||0)+1,(proj.sincRev||0)+1);sucios.add(proj);clearTimeout(tGuardar);tGuardar=setTimeout(vaciar,300);if(proj.equipo){normalizarOrden(proj.posts);programarSync(proj)}if(proj===P)pintarCompartir()};
 const guardar=()=>marcar(P);
-const recordarUltimo=()=>{try{localStorage.setItem('visor-ultimo',P.id)}catch(_){}};
+const recordarUltimo=()=>{try{localStorage.setItem('visor-ultimo-'+(P.equipo?'grupal':'local'),P.id)}catch(_){}};
 class VisorError extends Error{}
 
 /* ======================= imágenes ======================= */
@@ -479,7 +514,7 @@ $('#fHl').onchange=async e=>{if(!e.target.files[0]||hlTarget==null)return;const 
 async function agregarArchivos(files){
   const nuevas=[];
   for(const f of [...files].filter(f=>f.type.startsWith('image/'))){
-    nuevas.push({id:uid(),img:await leerImagen(f),desc:'',fijado:false,tipo:'foto',propuesta:$('#asNew').checked});
+    nuevas.push({id:uid(),img:await leerImagen(f),desc:'',fijado:false,tipo:'foto',propuesta:$('#asNew').checked,creado:Date.now()});
   }
   // las recién subidas quedan arriba (la primera del lote queda más reciente)
   P.posts.unshift(...nuevas);
@@ -543,7 +578,7 @@ function accion(p,a){
   if(a==='up'&&i>0) moverAntes(p,vis[i-1]);
   if(a==='dn'&&i<vis.length-1) moverPost(p.id,vis[i+1].id);
   if(a==='rep'){repTarget=p;fRep.click();return}
-  if(a==='del'){if(!confirm('¿Quitar esta publicación?'))return;P.posts.splice(P.posts.indexOf(p),1)}
+  if(a==='del'){if(!confirm(P.equipo?'¿Quitar esta publicación? Se quita para todo el equipo.':'¿Quitar esta publicación?'))return;if(P.equipo)(P.borrados=P.borrados||[]).push(p.id);P.posts.splice(P.posts.indexOf(p),1)}
   guardar();render();
 }
 function moverAntes(a,b){
@@ -736,13 +771,13 @@ function fijarVersion(proj){
 // punto en «Compartir link» cuando hay cambios que el equipo todavía no ve
 function pintarCompartir(){
   const b=$('#bShare'); if(!b||!P)return;
-  const pend=cambiosLocales(P)||!P.vid;
+  const pend=!P.equipo&&(cambiosLocales(P)||!P.vid); // en Grupal todo se guarda solo
   b.classList.toggle('pend',pend);
   b.title=pend?'Hay cambios que el equipo todavía no ve: comparte un link nuevo':'El último link compartido ya tiene todo';
 }
 function paraCompartir(proj){
   const f=proj.perfil;
-  return {v:3,sid:proj.sid,vid:proj.vid||null,hist:(proj.hist||[]).slice(0,30),nombre:proj.nombre,ui:{...ui},
+  return {v:3,sid:proj.sid,vid:proj.vid||null,hist:(proj.hist||[]).slice(0,30),nombre:proj.nombre,ui:{vista:ui.vista,ratio:ui.ratio,ph:ui.ph,show:ui.show,tag:ui.tag},
     perfil:{usuario:f.usuario,nombre:f.nombre,avatar:f.avatar,aro:!!f.aro,verif:!!f.verif,pubs:f.pubs,seguidores:f.seguidores,seguidos:f.seguidos,cat:f.cat,bio:f.bio,enlace:f.enlace,botones:f.botones,azul:!!f.azul},
     destacadas:proj.destacadas.map(h=>({img:h.img,titulo:h.titulo})),
     posts:proj.posts.map(p=>({id:p.id,img:p.img,desc:p.desc,tipo:p.tipo,fijado:!!p.fijado,propuesta:!!p.propuesta}))};
@@ -821,18 +856,25 @@ async function recibirProyecto(d,origen){
     else if(op==='reemplazar'){destino=reemplazar();toast('Reemplazado por la versión de '+de)}
     else{destino=ex;mostrado=false}
   }
-  P=destino; recordarUltimo(); render(true);
+  cambiarEspacio('local',destino); // lo que llega por link o archivo queda en Local
   if(autoSubir())subirPendientes();
   return mostrado;
 }
 async function revisarHash(){
+  const me=/^#equipo=([A-Za-z0-9]{4,40})$/.exec(location.hash);
+  if(me){ // link a un perfil del equipo: se abre en Grupal cuando llega la lista
+    try{history.replaceState(null,'',location.href.split('#')[0])}catch(_){}
+    eq.pendienteSid=me[1]; ui.espacio='grupal'; guardarUI(); pintarEspacio();
+    if(eq.estado==='vivo')alConectar();else conectarEquipo();
+    return;
+  }
   const m=/^#p=([A-Za-z0-9_-]+)$/.exec(location.hash);
   if(!m)return;
   try{history.replaceState(null,'',location.href.split('#')[0])}catch(_){}
   let d;
   try{d=sanear(JSON.parse(await descomprimir(m[1])),'link')}
   catch(err){alert('No se pudo abrir el link compartido: '+(err instanceof VisorError?err.message:'está incompleto o dañado')+'.');return}
-  if(await recibirProyecto(d,'link')&&d.ui){aplicarUI(d.ui);guardarUI();pintarSegmentos();renderTelefonos()}
+  if(await recibirProyecto(d,'link')&&d.ui){const u={...d.ui};delete u.espacio;aplicarUI(u);guardarUI();pintarSegmentos();renderTelefonos()}
 }
 window.addEventListener('hashchange',revisarHash);
 
@@ -867,6 +909,15 @@ async function copiar(t,ta){
 $('#bShare').onclick=async()=>{
   const btn=$('#bShare'); if(btn.disabled)return;
   const proj=P;
+  if(proj.equipo){ // perfil del equipo: el link abre la versión en vivo
+    if(!await subirImagenesDe(proj,btn))return;
+    const url=location.href.split('#')[0]+'#equipo='+proj.sid;
+    copiar(url).then(ok=>{if(ok)toast('Link copiado')});
+    dialogo({titulo:'Link del perfil del equipo',
+      texto:['Quien abra este link verá este perfil EN VIVO: lo que cualquiera cambie aparece solo.','No hace falta mandar uno nuevo después de cada cambio.'],
+      link:url,botones:[['cerrar','Cerrar'],['copiar','Copiar link',true]]});
+    return;
+  }
   if(pendientes(proj).length){
     btn.disabled=true; btn.textContent='Subiendo imágenes…';
     reintentarErrores(proj); subirPendientes(proj); await esperarCola();
@@ -909,16 +960,358 @@ if(canal)canal.onmessage=async e=>{
   }
 };
 
+/* ======================= equipo en vivo (Firebase / Firestore) ======================= */
+// Proyecto de Firebase de IMP TRAVEL (datos públicos por diseño; lo que protege son las reglas de Firestore).
+const FB_CONFIG={apiKey:"AIzaSyCm1Hs-aCPZQJJ2blaY3FtI8g_W4nNfm10",authDomain:"eventosimp-ec898.firebaseapp.com",projectId:"eventosimp-ec898",
+  storageBucket:"eventosimp-ec898.firebasestorage.app",messagingSenderId:"994562839195",appId:"1:994562839195:web:a3a9e465043f2b2fb9ec3e"};
+const FB_SDK='https://www.gstatic.com/firebasejs/10.14.1';
+// ?coleccion=visor_pruebas se usa solo en las pruebas automáticas, para no tocar los perfiles del equipo
+const COL=(()=>{try{return new URLSearchParams(location.search).get('coleccion')==='visor_pruebas'?'visor_pruebas':'visor_equipo'}catch(_){return 'visor_equipo'}})();
+const CAMPOS_PERFIL=['usuario','nombre','avatar','aro','verif','pubs','seguidores','seguidos','cat','bio','enlace','botones','azul'];
+const TOPES_PERFIL={usuario:60,nombre:80,pubs:20,seguidores:20,seguidos:20,cat:60,bio:500,enlace:120,botones:120};
+const CAMPOS_POST=['img','desc','tipo','propuesta','fijado','o'];
+const eq={estado:'apagado',F:null,fs:null,lista:null,posts:null,abierto:null,guardando:0,pendienteSid:null};
+// lo último que se sabe del equipo, por perfil: sirve para mandar solo lo que cambió y no pisar a otros
+const remoto=new Map();
+const R=sid=>{let r=remoto.get(sid);if(!r){r={meta:null,posts:new Map()};remoto.set(sid,r)}return r};
+const igual=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const enEspacio=p=>ui.espacio==='grupal'?!!p.equipo:!p.equipo;
+
+function traducirFirestore(err){
+  const c=(err&&err.code)||'', m=String((err&&err.message)||'');
+  if(c==='permission-denied')return 'Firebase no da permiso: faltan publicar las reglas del visor';
+  if(/does not exist|not.?found/i.test(m)||c==='not-found')return 'la base de datos del equipo todavía no está creada en Firebase';
+  if(c==='unavailable')return 'sin conexión';
+  if(c==='resource-exhausted')return 'se alcanzó el límite gratis de hoy en Firebase';
+  return m.slice(0,140)||'error desconocido';
+}
+// lo que llega del equipo también se revisa campo por campo
+const sinLocal=u=>{const x=imgOk(u);return esLocal(x)?'':x};
+function limpiarMeta(d){
+  d=(d&&typeof d==='object')?d:{};
+  const f=(d.perfil&&typeof d.perfil==='object')?d.perfil:{};
+  const perfil={avatar:sinLocal(f.avatar),aro:f.aro!==false,verif:!!f.verif,azul:f.azul!==false};
+  for(const k in TOPES_PERFIL)perfil[k]=txt(f[k],TOPES_PERFIL[k]);
+  return {nombre:txt(d.nombre,80).trim()||'Perfil del equipo',perfil,
+    destacadas:(Array.isArray(d.destacadas)?d.destacadas:[]).slice(0,30).filter(h=>h&&typeof h==='object').map(h=>({img:sinLocal(h.img),titulo:txt(h.titulo,30)})),
+    creado:Number.isFinite(d.creado)?d.creado:0};
+}
+function limpiarPostRemoto(d){
+  if(!d||typeof d!=='object')return null;
+  const img=sinLocal(d.img); if(!img)return null;
+  return {img,desc:txt(d.desc,2200),tipo:['foto','carrusel','reel'].includes(d.tipo)?d.tipo:'foto',
+    propuesta:!!d.propuesta,fijado:!!d.fijado,o:Number.isFinite(d.o)?d.o:0,creado:Number.isFinite(d.creado)?d.creado:0};
+}
+// lo que se manda al equipo: las imágenes que todavía se están subiendo no viajan (van cuando llegan a la nube)
+function metaParaEquipo(proj){
+  const r=R(proj.sid).meta, f=proj.perfil;
+  const img=(u,prev)=>esLocal(u)?(prev||''):(sinLocal(u));
+  const perfil={avatar:img(f.avatar,r&&r.perfil.avatar),aro:!!f.aro,verif:!!f.verif,azul:!!f.azul};
+  for(const k in TOPES_PERFIL)perfil[k]=txt(f[k],TOPES_PERFIL[k]);
+  return {nombre:txt(proj.nombre,80).trim()||'Perfil del equipo',perfil,
+    destacadas:proj.destacadas.slice(0,30).map((h,i)=>({img:img(h.img,r&&r.destacadas[i]&&r.destacadas[i].img),titulo:txt(h.titulo,30)}))};
+}
+const postParaEquipo=p=>({img:p.img,desc:txt(p.desc,2200),tipo:['foto','carrusel','reel'].includes(p.tipo)?p.tipo:'foto',propuesta:!!p.propuesta,fijado:!!p.fijado,o:p.o});
+// orden de la grilla: cada publicación lleva un número; al mover una, solo cambia el número de esa
+function normalizarOrden(posts){
+  let prev=-Infinity;
+  for(let i=0;i<posts.length;i++){
+    const p=posts[i]; let next=Infinity;
+    for(let j=i+1;j<posts.length;j++){const q=posts[j].o;if(Number.isFinite(q)&&q>prev){next=q;break}}
+    if(!(Number.isFinite(p.o)&&p.o>prev&&p.o<next))
+      p.o=Number.isFinite(prev)&&Number.isFinite(next)?(prev+next)/2:Number.isFinite(prev)?prev+1024:Number.isFinite(next)?next-1024:0;
+    prev=p.o;
+  }
+}
+
+async function conectarEquipo(){
+  if(eq.fs||eq.estado==='conectando')return;
+  eq.estado='conectando'; pintarEspacio();
+  try{
+    const [A,F]=await Promise.all([import(FB_SDK+'/firebase-app.js'),import(FB_SDK+'/firebase-firestore.js')]);
+    const app=A.initializeApp(FB_CONFIG,'visor-perfil');
+    let fs; try{fs=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})})}catch(_){fs=F.getFirestore(app)}
+    eq.F=F; eq.fs=fs; escucharLista();
+  }catch(_){eq.estado='error';eq.error='no se pudo cargar Firebase (revisa internet)';pintarEspacio()}
+}
+function reintentarEquipo(){
+  if(eq.lista){try{eq.lista()}catch(_){}eq.lista=null}
+  if(eq.fs){eq.estado='conectando';pintarEspacio();escucharLista()}else{eq.estado='apagado';conectarEquipo()}
+}
+function escucharLista(){
+  const {F,fs}=eq;
+  // si Firebase no contesta (sin internet, base de datos sin crear o reglas sin publicar) no se queda «conectando» para siempre
+  clearTimeout(eq.tEspera);
+  eq.tEspera=setTimeout(()=>{if(eq.estado==='conectando'){eq.estado='error';eq.error='Firebase no responde: revisa internet, que la base de datos esté creada y que las reglas estén publicadas';pintarEspacio()}},12000);
+  eq.lista=F.onSnapshot(F.collection(fs,COL),snap=>{
+    const primera=eq.estado!=='vivo'; eq.estado='vivo'; eq.error='';
+    snap.docChanges().forEach(ch=>{
+      const sid=ch.doc.id; if(!RX_ID.test(sid))return;
+      if(ch.type==='removed')quitarDelEquipo(sid);
+      else aplicarMeta(sid,limpiarMeta(ch.doc.data()));
+    });
+    if(primera)alConectar();else{if(enEspacio(P))renderProyectos();pintarEspacio()}
+    if(porSubir.size)sincronizar(); // lo que se cambió mientras no había conexión
+  },err=>{eq.estado='error';eq.error=traducirFirestore(err);pintarEspacio()});
+}
+function aplicarMeta(sid,m){
+  const r=R(sid), antes=r.meta; r.meta=m;
+  let proj=proyectos.find(p=>p.equipo&&p.sid===sid);
+  if(!proj){
+    proyectos.push({id:'eq-'+sid,sid,equipo:true,nombre:m.nombre,perfil:{...m.perfil},destacadas:m.destacadas.map(h=>({...h})),
+      posts:[],creado:m.creado||Date.now(),rev:0,sincRev:0,vid:null,hist:[],borrados:[],cargado:false});
+    return;
+  }
+  // se aplica solo lo que este navegador no tiene cambiado sin guardar
+  let cambio=false;
+  if((!antes||proj.nombre===antes.nombre)&&proj.nombre!==m.nombre){proj.nombre=m.nombre;cambio=true}
+  CAMPOS_PERFIL.forEach(k=>{if((!antes||igual(proj.perfil[k],antes.perfil[k]))&&!igual(proj.perfil[k],m.perfil[k])){proj.perfil[k]=m.perfil[k];cambio=true}});
+  if((!antes||igual(proj.destacadas,antes.destacadas))&&!igual(proj.destacadas,m.destacadas)){proj.destacadas=m.destacadas.map(h=>({...h}));cambio=true}
+  if(cambio&&proj===P)repintarDesdeEquipo();
+}
+function quitarDelEquipo(sid){
+  remoto.delete(sid);
+  const i=proyectos.findIndex(p=>p.equipo&&p.sid===sid); if(i<0)return;
+  const era=proyectos[i]===P; proyectos.splice(i,1);
+  if(era&&ui.espacio==='grupal'){toast('Alguien del equipo borró este perfil');cambiarEspacio('grupal')}
+}
+function escucharPosts(proj){
+  if(eq.posts){try{eq.posts()}catch(_){}eq.posts=null;eq.abierto=null}
+  if(!eq.fs||!proj||!proj.equipo)return;
+  const {F,fs}=eq; eq.abierto=proj.sid;
+  eq.posts=F.onSnapshot(F.collection(fs,COL,proj.sid,'posts'),snap=>{
+    if(eq.abierto!==proj.sid)return;
+    const r=R(proj.sid); let cambio=!proj.cargado;
+    snap.docChanges().forEach(ch=>{
+      const pid=ch.doc.id; if(!RX_ID.test(pid))return;
+      if(ch.type==='removed'){
+        r.posts.delete(pid);
+        const i=proj.posts.findIndex(p=>p.id===pid); if(i>=0){proj.posts.splice(i,1);cambio=true}
+        return;
+      }
+      const x=limpiarPostRemoto(ch.doc.data()); if(!x)return;
+      const antes=r.posts.get(pid); r.posts.set(pid,x);
+      if((proj.borrados||[]).includes(pid))return; // lo borraste aquí y todavía no se manda
+      const p=proj.posts.find(q=>q.id===pid);
+      if(!p){proj.posts.push({id:pid,...x});cambio=true}
+      else CAMPOS_POST.forEach(k=>{if((!antes||igual(p[k],antes[k]))&&!igual(p[k],x[k])){p[k]=x[k];cambio=true}});
+    });
+    proj.cargado=true;
+    if(cambio){proj.posts.sort((a,b)=>(a.o||0)-(b.o||0));if(proj===P)repintarDesdeEquipo()}
+  },err=>{eq.estado='error';eq.error=traducirFirestore(err);pintarEspacio()});
+}
+// lo que llega del equipo se dibuja al momento, menos el campo que estás escribiendo:
+// los demás campos del perfil se actualizan; la lista de publicaciones o de destacadas espera a que salgas de ella
+let pendLista=false, pendHl=false;
+const dentro=sel=>{const a=document.activeElement;return !!(a&&a.closest&&a.closest(sel))};
+function repintarDesdeEquipo(){
+  renderTelefonos(); renderProyectos();
+  const a=document.activeElement;
+  Object.entries(campos).forEach(([id,k])=>{const el=$('#'+id);if(el!==a&&el.value!==(P.perfil[k]??''))el.value=P.perfil[k]??''});
+  Object.entries(checks).forEach(([id,k])=>{$('#'+id).checked=!!P.perfil[k]});
+  $('#avEditIn').style.cssText=bg(P.perfil.avatar);
+  if(dentro('#hList'))pendHl=true;else{pendHl=false;renderDestacadas()}
+  if(dentro('#pList'))pendLista=true;else{pendLista=false;renderLista()}
+  pintarEstados(); pintarCompartir();
+}
+document.addEventListener('focusout',()=>setTimeout(()=>{
+  if(pendLista&&!dentro('#pList')){pendLista=false;renderLista();pintarEstados()}
+  if(pendHl&&!dentro('#hList')){pendHl=false;renderDestacadas()}
+},0));
+
+// guardar en el equipo: espera un instante y manda solo los campos y publicaciones que cambiaron
+const porSubir=new Set(); let tSync=null;
+function programarSync(proj){porSubir.add(proj);clearTimeout(tSync);tSync=setTimeout(sincronizar,450)}
+function sincronizar(){const l=[...porSubir];porSubir.clear();l.forEach(p=>{if(p.equipo&&proyectos.includes(p))subirAlEquipo(p)})}
+function escribir(prom,alFallar){
+  eq.guardando++;pintarEspacio();
+  prom.catch(err=>{if(alFallar&&alFallar(err)===true)return;toast('No se guardó en el equipo: '+traducirFirestore(err))})
+    .finally(()=>{eq.guardando--;pintarEspacio()});
+}
+function subirAlEquipo(proj){
+  const {F,fs}=eq; if(!fs||eq.estado!=='vivo'){porSubir.add(proj);return}
+  const r=R(proj.sid), ref=F.doc(fs,COL,proj.sid);
+  normalizarOrden(proj.posts);
+  const meta=metaParaEquipo(proj);
+  if(!r.meta){
+    const doc={...meta,creado:proj.creado||Date.now()}; r.meta={...doc};
+    escribir(F.setDoc(ref,doc),()=>{r.meta=null});
+  }else{
+    const u={};
+    if(meta.nombre!==r.meta.nombre)u.nombre=meta.nombre;
+    CAMPOS_PERFIL.forEach(k=>{if(!igual(meta.perfil[k],r.meta.perfil[k]))u['perfil.'+k]=meta.perfil[k]});
+    if(!igual(meta.destacadas,r.meta.destacadas))u.destacadas=meta.destacadas;
+    if(Object.keys(u).length){
+      r.meta={...r.meta,nombre:meta.nombre,perfil:{...meta.perfil},destacadas:meta.destacadas};
+      escribir(F.updateDoc(ref,u),err=>{if(err&&err.code==='not-found')return true;r.meta=null});
+    }
+  }
+  const aqui=new Set();
+  for(const p of proj.posts){
+    if(esLocal(p.img)||!imgOk(p.img))continue; // todavía se está subiendo a la nube
+    aqui.add(p.id);
+    const x=postParaEquipo(p), rp=r.posts.get(p.id), pr=F.doc(fs,COL,proj.sid,'posts',p.id);
+    if(!rp){
+      const doc={...x,creado:p.creado||Date.now()}; r.posts.set(p.id,doc);
+      escribir(F.setDoc(pr,doc),()=>{r.posts.delete(p.id)});
+    }else{
+      const u={}; CAMPOS_POST.forEach(k=>{if(!igual(x[k],rp[k]))u[k]=x[k]});
+      if(Object.keys(u).length){
+        r.posts.set(p.id,{...rp,...u});
+        escribir(F.updateDoc(pr,u),err=>{if(err&&err.code==='not-found')return true;r.posts.delete(p.id)});
+      }
+    }
+  }
+  const borrar=(proj.borrados||[]).filter(pid=>!aqui.has(pid)); proj.borrados=[];
+  borrar.forEach(pid=>{r.posts.delete(pid);escribir(F.deleteDoc(F.doc(fs,COL,proj.sid,'posts',pid)))});
+}
+function nuevoDelEquipo(base){
+  const sid=uid(), t=Date.now();
+  const p={...base,id:'eq-'+sid,sid,equipo:true,creado:t,rev:t,sincRev:0,vid:null,hist:[],borrados:[],cargado:true};
+  p.posts=p.posts.map((x,i)=>({...x,o:i*1024,creado:x.creado||t}));
+  proyectos.push(p); subirAlEquipo(p); return p;
+}
+async function subirImagenesDe(proj,btn,texto){
+  if(!pendientes(proj).length)return true;
+  if(btn){btn.disabled=true;btn.dataset.txt=btn.textContent;btn.textContent=texto||'Subiendo imágenes…'}
+  reintentarErrores(proj); subirPendientes(proj); await esperarCola();
+  if(btn){btn.disabled=false;btn.textContent=btn.dataset.txt}
+  const quedan=pendientes(proj).length;
+  if(quedan)alert(`No se pudieron subir ${quedan} imagen(es) a la nube. Revisa la conexión y vuelve a intentar.`);
+  return !quedan;
+}
+async function copiarAlEquipo(){
+  if(eq.estado!=='vivo'){alert('No hay conexión con el equipo: '+(eq.error||'conectando…'));return}
+  const proj=P; if(proj.equipo)return;
+  if(!await subirImagenesDe(proj,$('#bMover')))return;
+  vaciar();
+  const copia=JSON.parse(JSON.stringify({nombre:proj.nombre,perfil:proj.perfil,destacadas:proj.destacadas,
+    posts:proj.posts.map(p=>({id:p.id,img:p.img,desc:p.desc||'',tipo:p.tipo||'foto',fijado:!!p.fijado,propuesta:!!p.propuesta}))}));
+  const nuevo=nuevoDelEquipo(copia);
+  cambiarEspacio('grupal',nuevo); toast('Copiado al equipo: ahora todos lo ven en Grupal');
+}
+function copiarALocal(){
+  const proj=P; if(!proj.equipo)return;
+  const c=nuevoProyecto((proj.nombre+' (local)').slice(0,80));
+  c.perfil=JSON.parse(JSON.stringify(proj.perfil)); c.destacadas=JSON.parse(JSON.stringify(proj.destacadas));
+  c.posts=proj.posts.map(p=>({id:p.id,img:p.img,desc:p.desc||'',tipo:p.tipo||'foto',fijado:!!p.fijado,propuesta:!!p.propuesta,o:p.o}));
+  proyectos.push(c); DB.put(c);
+  cambiarEspacio('local',c); toast('Copiado a Local: solo tú lo ves');
+}
+async function borrarDelEquipo(proj){
+  const {F,fs}=eq; if(!fs)return false;
+  try{
+    const s=await F.getDocs(F.collection(fs,COL,proj.sid,'posts'));
+    await Promise.all(s.docs.map(d=>F.deleteDoc(d.ref)));
+    await F.deleteDoc(F.doc(fs,COL,proj.sid));
+    return true;
+  }catch(err){alert('No se pudo borrar del equipo: '+traducirFirestore(err));return false}
+}
+
+/* ======================= Local / Grupal ======================= */
+function abrirProyecto(proj){if(proj&&proj.equipo)escucharPosts(proj);else escucharPosts(null)}
+function cambiarEspacio(e,pref){
+  vaciar();
+  ui.espacio=e; guardarUI();
+  if(e==='grupal'&&eq.estado!=='vivo')conectarEquipo();
+  let lista=proyectos.filter(enEspacio);
+  if(e==='local'&&!lista.length){const p=nuevoProyecto('Mi perfil');proyectos.push(p);DB.put(p);lista=[p]}
+  let ult=null; try{ult=localStorage.getItem('visor-ultimo-'+e)||(e==='local'?localStorage.getItem('visor-ultimo'):null)}catch(_){}
+  const destino=(pref&&proyectos.includes(pref)&&pref)||lista.find(p=>p.id===ult)||lista[0]||null;
+  if(destino){P=destino;recordarUltimo();abrirProyecto(P)}
+  render(true); pintarEspacio();
+}
+function ultimoLocal(){
+  let ult=null; try{ult=localStorage.getItem('visor-ultimo-local')||localStorage.getItem('visor-ultimo')}catch(_){}
+  const l=proyectos.filter(p=>!p.equipo); return l.find(p=>p.id===ult)||l[0]||null;
+}
+function alConectar(){
+  pintarEspacio();
+  if(eq.pendienteSid){
+    const sid=eq.pendienteSid; eq.pendienteSid=null;
+    const p=proyectos.find(x=>x.equipo&&x.sid===sid);
+    if(p){cambiarEspacio('grupal',p);return}
+    toast('Ese perfil del equipo ya no existe');
+  }
+  if(ui.espacio==='grupal')cambiarEspacio('grupal');
+}
+function pintarEspacio(){
+  const e=ui.espacio, g=e==='grupal';
+  $('#espLocal').classList.toggle('on',!g); $('#espGrupal').classList.toggle('on',g);
+  $('#espLocal').setAttribute('aria-pressed',String(!g)); $('#espGrupal').setAttribute('aria-pressed',String(g));
+  const st=$('#espEstado'); st.textContent=''; const s=document.createElement('span');
+  if(!g){s.textContent='💻 Solo en este navegador · se muestra con «Compartir link»'}
+  else if(eq.estado==='vivo'){s.className='vivo';s.textContent=eq.guardando?'● En vivo · guardando…':'● En vivo con el equipo · todo guardado'}
+  else if(eq.estado==='error'){s.className='malo';s.textContent='⚠ Sin conexión con el equipo'}
+  else{s.textContent='Conectando con el equipo…'}
+  st.appendChild(s);
+  document.body.classList.toggle('grupal',g);
+  $('#lblProy').textContent=g?'Perfiles del equipo (todos los ven en vivo)':'Perfiles locales (solo en este navegador)';
+  $('#bMover').textContent=g?'📥 Copiar a local':'📤 Copiar al equipo';
+  $('#bMover').title=g?'Hace una copia privada en Local para probar ideas sin que el equipo la vea':'Hace una copia en Grupal: todo el equipo la verá y podrá editarla';
+  $('#hintEsp').textContent=g
+    ?'Todo lo que cambies aquí lo ve el equipo al instante. Las imágenes se suben solas a la nube.'
+    :'Esto solo lo ves tú. Para mostrarlo, usa «Compartir link» o «Copiar al equipo».';
+  pintarVelo();
+}
+function pintarVelo(){
+  const v=$('#velo'); let modo=null;
+  if(ui.espacio==='grupal'){
+    if(eq.estado==='error')modo='error';
+    else if(eq.estado!=='vivo')modo='conectando';
+    else if(!proyectos.some(p=>p.equipo))modo='vacio';
+  }
+  v.classList.toggle('hidden',!modo);
+  if(!modo)return;
+  const loc=ultimoLocal();
+  $('#veloTit').textContent={error:'No se pudo conectar con el equipo',conectando:'Conectando con el equipo…',vacio:'Todavía no hay perfiles del equipo'}[modo];
+  $('#veloTxt').textContent={error:'Motivo: '+(eq.error||'desconocido')+'. Mientras tanto puedes trabajar en Local.',
+    conectando:'Un momento: estamos trayendo los perfiles que comparte el equipo.',
+    vacio:'Crea el primero o copia aquí un perfil que tengas en Local. Todo el equipo lo verá al instante.'}[modo];
+  $('#veloReintentar').classList.toggle('hidden',modo!=='error');
+  $('#veloCrear').classList.toggle('hidden',modo!=='vacio');
+  $('#veloCopiar').classList.toggle('hidden',modo!=='vacio'||!loc);
+  if(loc)$('#veloCopiar').textContent=`📤 Copiar «${loc.nombre}» al equipo`;
+}
+$('#espLocal').onclick=()=>{if(ui.espacio!=='local')cambiarEspacio('local')};
+$('#espGrupal').onclick=()=>{if(ui.espacio!=='grupal')cambiarEspacio('grupal')};
+$('#veloLocal').onclick=()=>cambiarEspacio('local');
+$('#veloReintentar').onclick=reintentarEquipo;
+$('#veloCrear').onclick=()=>{const n=prompt('Nombre del perfil del equipo (ej: Kino – noviembre):','Perfil del equipo');if(!n)return;
+  const b=nuevoProyecto(n.trim().slice(0,80)||'Perfil del equipo');const p=nuevoDelEquipo({nombre:b.nombre,perfil:b.perfil,destacadas:b.destacadas,posts:[]});cambiarEspacio('grupal',p)};
+$('#veloCopiar').onclick=async()=>{const loc=ultimoLocal();if(!loc)return;P=loc;await copiarAlEquipo()};
+$('#bMover').onclick=()=>{if(P.equipo)copiarALocal();else copiarAlEquipo()};
+
 /* ======================= proyectos ======================= */
 function renderProyectos(){
-  $('#selProj').innerHTML=proyectos.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
-  $('#selProj').value=P.id;
+  const l=proyectos.filter(enEspacio);
+  $('#selProj').innerHTML=l.map(p=>`<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('')||'<option value="">(sin perfiles)</option>';
+  if(l.includes(P))$('#selProj').value=P.id;
 }
-$('#selProj').onchange=e=>{P=proyectos.find(p=>p.id===e.target.value);recordarUltimo();render(true);if(autoSubir())subirPendientes()};
-$('#bNewProj').onclick=()=>{const n=prompt('Nombre del proyecto (ej: Kino – noviembre):','Perfil nuevo');if(!n)return;const p=nuevoProyecto(n.slice(0,80));proyectos.push(p);P=p;DB.put(p);recordarUltimo();render(true)};
+$('#selProj').onchange=e=>{const x=proyectos.find(p=>p.id===e.target.value);if(!x)return;P=x;recordarUltimo();abrirProyecto(P);render(true);if(autoSubir())subirPendientes()};
+$('#bNewProj').onclick=()=>{
+  const g=ui.espacio==='grupal';
+  const n=prompt(g?'Nombre del perfil del equipo (ej: Kino – noviembre):':'Nombre del perfil local (ej: Kino – prueba):',g?'Perfil del equipo':'Perfil nuevo');if(!n)return;
+  const b=nuevoProyecto(n.trim().slice(0,80)||'Perfil nuevo');
+  if(g){if(eq.estado!=='vivo'){alert('No hay conexión con el equipo: '+(eq.error||'conectando…'));return}cambiarEspacio('grupal',nuevoDelEquipo({nombre:b.nombre,perfil:b.perfil,destacadas:b.destacadas,posts:[]}));return}
+  proyectos.push(b);P=b;DB.put(b);recordarUltimo();abrirProyecto(P);render(true)};
 $('#bRenProj').onclick=()=>{const n=prompt('Nuevo nombre del proyecto:',P.nombre);if(n==null)return;const t=n.trim().slice(0,80);if(!t)return;P.nombre=t;guardar();renderProyectos();toast('Proyecto renombrado')};
-$('#bDupProj').onclick=()=>{vaciar();const c=JSON.parse(JSON.stringify(P));c.id=uid();c.sid=uid();c.vid=null;c.hist=[];c.sincRev=0;c.rev=Date.now();c.creado=c.rev;c.nombre=P.nombre+' (versión B)';proyectos.push(c);P=c;DB.put(c);recordarUltimo();render(true);toast('Duplicado')};
-$('#bDelProj').onclick=()=>{if(!confirm(`¿Borrar el proyecto "${P.nombre}"? No se puede deshacer.`))return;sucios.delete(P);DB.del(P.id);proyectos=proyectos.filter(p=>p!==P);if(!proyectos.length){proyectos=[nuevoProyecto()];DB.put(proyectos[0])}P=proyectos[0];render(true)};
+$('#bDupProj').onclick=async()=>{
+  if(P.equipo){ // copia dentro del equipo
+    if(!await subirImagenesDe(P,$('#bDupProj'),'Subiendo…'))return;
+    const c=JSON.parse(JSON.stringify({nombre:(P.nombre+' (versión B)').slice(0,80),perfil:P.perfil,destacadas:P.destacadas,
+      posts:P.posts.map(x=>({id:x.id,img:x.img,desc:x.desc||'',tipo:x.tipo||'foto',fijado:!!x.fijado,propuesta:!!x.propuesta}))}));
+    cambiarEspacio('grupal',nuevoDelEquipo(c));toast('Duplicado en el equipo');return;
+  }
+  vaciar();const c=JSON.parse(JSON.stringify(P));c.id=uid();c.sid=uid();c.vid=null;c.hist=[];c.sincRev=0;c.rev=Date.now();c.creado=c.rev;c.nombre=P.nombre+' (versión B)';proyectos.push(c);P=c;DB.put(c);recordarUltimo();render(true);toast('Duplicado')};
+$('#bDelProj').onclick=async()=>{
+  if(P.equipo){
+    if(!confirm(`¿Borrar «${P.nombre}» para TODO el equipo? Nadie podrá verlo y no se puede deshacer.\n(Si quieres guardarlo, antes usa «Copiar a local».)`))return;
+    const x=P; if(!await borrarDelEquipo(x))return;
+    const i=proyectos.indexOf(x); if(i>=0)proyectos.splice(i,1); remoto.delete(x.sid);
+    cambiarEspacio('grupal'); toast('Perfil borrado del equipo'); return;
+  }
+  if(!confirm(`¿Borrar el proyecto "${P.nombre}"? No se puede deshacer.`))return;sucios.delete(P);DB.del(P.id);proyectos=proyectos.filter(p=>p!==P);if(!proyectos.length){proyectos=[nuevoProyecto()];DB.put(proyectos[0])}P=proyectos[0];render(true)};
 $('#bExport').onclick=()=>{
   fijarVersion(P); pintarCompartir();
   const blob=new Blob([JSON.stringify({visor:3,proyecto:paraCompartir(P)})],{type:'application/json'});
@@ -983,10 +1376,11 @@ function render(full){
   proyectos=proyectos.map(x=>{const p=limpiarGuardado(x);if(p&&JSON.stringify(p)!==JSON.stringify(x))DB.put(p);return p}).filter(Boolean);
   proyectos.sort((a,b)=>(a.creado||0)-(b.creado||0));
   if(!proyectos.length){proyectos=[nuevoProyecto('Mi perfil')];DB.put(proyectos[0])}
-  let ult=null;try{ult=localStorage.getItem('visor-ultimo')}catch(_){}
+  let ult=null;try{ult=localStorage.getItem('visor-ultimo-local')||localStorage.getItem('visor-ultimo')}catch(_){}
   P=proyectos.find(p=>p.id===ult)||proyectos[0];
-  render(true);
+  render(true); pintarEspacio();
   await revisarHash(); // ¿se abrió con un link compartido?
+  conectarEquipo();    // trae los perfiles del equipo (Grupal)
   if(autoSubir())subirPendientes();
 })();
 window.addEventListener('beforeunload',vaciar);
