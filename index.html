@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Visor de Perfil</title>
 <meta name="description" content="Maqueta visual de un perfil de Instagram para probar imágenes nuevas, fijadas y descripciones en equipo.">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root{
   --bg:#eef0f3; --panel:#ffffff; --ink:#1d2330; --muted:#6b7385; --line:#dfe3ea; --accent:#3a5bd9; --accent-ink:#fff; --danger:#c8373b; --chip:#f3f5f8;
@@ -131,6 +131,23 @@ textarea{resize:vertical;min-height:60px}
 .post .when{color:var(--ph-muted);font-size:12px;padding:0 12px 14px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:9px 14px;border-radius:9px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:30}
 .toast.on{opacity:1}
+.tag.st.nube{background:#e3f2ff;color:#0b4f8a;border-color:#a9d1f5}
+.tag.st.local{background:var(--chip);color:var(--muted);cursor:pointer}
+.tag.st.subiendo{background:#eef0ff;color:#3a46a8;border-color:#c5cbf5}
+.tag.st.error{background:#fde8e8;color:#9b1c1c;border-color:#f3b4b4;cursor:pointer}
+.estado{font-weight:400;font-size:12px;color:var(--muted);margin-left:auto;margin-right:8px}
+.panel a{color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+.dlg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:25}
+.dlg.on{display:flex}
+.dlg .box{background:var(--panel);color:var(--ink);border-radius:12px;padding:16px;width:min(520px,100%);box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.dlg h3{margin:0 0 8px;font-size:16px}
+.dlg p{margin:6px 0;color:var(--muted)}
+.dlg textarea{min-height:90px;font-size:12px;word-break:break-all}
+.dlg .row{justify-content:flex-end;margin-top:12px}
+.sec details{margin:10px 0 0}
+.sec details summary{padding:8px 10px;font-weight:500;font-size:13px}
+.btn.pend::after{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:#ffb020;margin-left:7px;vertical-align:middle;box-shadow:0 0 0 2px rgba(255,255,255,.6)}
 .hidden{display:none!important}
 </style>
 </head>
@@ -147,6 +164,7 @@ textarea{resize:vertical;min-height:60px}
     <div class="row">
       <select id="selProj" style="flex:1"></select>
       <button class="btn sm" id="bNewProj">Nuevo</button>
+      <button class="btn sm" id="bRenProj">Renombrar</button>
       <button class="btn sm" id="bDupProj" title="Duplicar para hacer una versión B">Duplicar</button>
       <button class="btn sm dan" id="bDelProj">Borrar</button>
     </div>
@@ -155,7 +173,27 @@ textarea{resize:vertical;min-height:60px}
       <button class="btn sm" id="bImport">Importar archivo</button>
       <input type="file" id="fImport" accept=".json,application/json" class="hidden">
     </div>
-    <p class="hint">Todo se guarda solo en este navegador. Para pasárselo al equipo usa <b>Exportar archivo</b> y ellos lo abren con <b>Importar</b>.</p>
+    <p class="hint">Lo que haces se guarda en este navegador y las imágenes se suben solas a la nube del equipo. Para mostrarlo, usa <b>Compartir link</b>. También puedes pasar un <b>archivo</b>.</p>
+
+    <details id="secNube">
+      <summary>Nube del equipo <span id="nubeEstado" class="estado"></span></summary>
+      <div class="sec">
+        <p class="hint">Las imágenes se guardan en la nube del equipo (<b>Cloudinary</b>) y las ve cualquiera que abra tu link. El orden, las fijadas y las descripciones viajan dentro del <b>link para compartir</b>.</p>
+        <label class="check"><input type="checkbox" id="autoSubir" checked> Subir automáticamente las imágenes nuevas</label>
+        <div class="row" style="margin-top:8px"><button class="btn sm" id="bSubirPend">Subir pendientes</button><span id="pendInfo" class="hint" style="margin:0"></span></div>
+        <details>
+          <summary>Usar otra nube de Cloudinary</summary>
+          <div class="sec">
+            <p class="hint" id="nubeActual"></p>
+            <div class="grid2">
+              <div><label for="nCloud">Cloud name</label><input type="text" id="nCloud" autocomplete="off" spellcheck="false" placeholder="ej: xwak6fqd"></div>
+              <div><label for="nPreset">Upload preset (Unsigned)</label><input type="text" id="nPreset" autocomplete="off" spellcheck="false" placeholder="ej: visor_instagram"></div>
+            </div>
+            <div class="row" style="margin-top:8px"><button class="btn sm" id="bNube">Probar y guardar</button><button class="btn sm" id="bNubeEquipo">Volver a la del equipo</button></div>
+          </div>
+        </details>
+      </div>
+    </details>
 
     <details open>
       <summary>Perfil</summary>
@@ -218,12 +256,14 @@ textarea{resize:vertical;min-height:60px}
       <div class="seg" id="segShow"><button data-s="12" class="on">12</button><button data-s="21">21</button><button data-s="all">Todas</button></div>
       <div class="seg" id="segTag"><button data-t="si" class="on">Etiqueta NUEVA</button><button data-t="no">Sin etiqueta</button></div>
       <button class="btn" id="bShot">Descargar imagen</button>
+      <button class="btn pri" id="bShare">Compartir link</button>
     </div>
     <div class="frames" id="frames"></div>
   </main>
 </div>
 
 <div class="modal" id="modal"><div class="post" id="postBox"></div></div>
+<div class="dlg" id="dlg" role="dialog" aria-modal="true"><div class="box"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -262,24 +302,35 @@ const DB = {
   db:null,
   open(){return new Promise((res)=>{try{const r=indexedDB.open('visor-perfil',1);r.onupgradeneeded=()=>r.result.createObjectStore('proy',{keyPath:'id'});r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>res();}catch(e){res()}})},
   all(){return new Promise(res=>{if(!this.db)return res([]);try{const q=this.db.transaction('proy').objectStore('proy').getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])}catch(e){res([])}})},
-  put(p){if(!this.db)return;try{this.db.transaction('proy','readwrite').objectStore('proy').put(p)}catch(e){}},
-  del(id){if(!this.db)return;try{this.db.transaction('proy','readwrite').objectStore('proy').delete(id)}catch(e){}},
+  get(id){return new Promise(res=>{if(!this.db)return res(null);try{const q=this.db.transaction('proy').objectStore('proy').get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null)}catch(e){res(null)}})},
+  put(p){if(!this.db)return;try{const t=this.db.transaction('proy','readwrite');t.objectStore('proy').put(p);t.oncomplete=()=>{try{canal&&canal.postMessage({tipo:'guardado',id:p.id})}catch(_){}}}catch(e){}},
+  del(id){if(!this.db)return;try{const t=this.db.transaction('proy','readwrite');t.objectStore('proy').delete(id);t.oncomplete=()=>{try{canal&&canal.postMessage({tipo:'borrado',id})}catch(_){}}}catch(e){}},
 };
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 
 function nuevoProyecto(nombre){
-  return {id:uid(),nombre:nombre||'Perfil nuevo',creado:Date.now(),
+  const t=Date.now();
+  // sid = identidad compartida; vid/hist = versión compartida y sus anteriores; rev/sincRev = último cambio y última sincronización (reloj local)
+  return {id:uid(),sid:uid(),vid:null,hist:[],rev:t,sincRev:0,nombre:nombre||'Perfil nuevo',creado:t,
     perfil:{usuario:'cuenta',nombre:'Nombre de la cuenta',avatar:'',aro:true,verif:false,pubs:'',seguidores:'12,4 mil',seguidos:'215',
       cat:'Entretenimiento',bio:'Escribe aquí la biografía\nCon saltos de línea y emojis ✨',enlace:'www.tusitio.cl',botones:'Seguir, Mensaje, Contacto',azul:true},
     destacadas:[{img:'',titulo:'Novedades'},{img:'',titulo:'Premios'},{img:'',titulo:'Ganadores'}],
     posts:[]};
 }
 
-let proyectos=[], P=null, sel=null;
+let proyectos=[], P=null;
 const ui={vista:'propuesta',ratio:'3/4',ph:'light',show:'12',tag:'si'};
-try{Object.assign(ui,JSON.parse(localStorage.getItem('visor-ui')||'{}'))}catch(e){}
+const UI_OK={vista:['actual','propuesta','comparar'],ratio:['3/4','4/5','1/1'],ph:['light','dark'],show:['12','21','all'],tag:['si','no']};
+function aplicarUI(o){if(!o||typeof o!=='object')return;for(const k in UI_OK){if(UI_OK[k].includes(o[k]))ui[k]=o[k]}}
+try{aplicarUI(JSON.parse(localStorage.getItem('visor-ui')||'{}'))}catch(e){}
 const guardarUI=()=>{try{localStorage.setItem('visor-ui',JSON.stringify(ui))}catch(e){}};
-let tGuardar; const guardar=()=>{clearTimeout(tGuardar);tGuardar=setTimeout(()=>DB.put(P),300)};
+// guardado con espera corta; recuerda cada proyecto tocado aunque se cambie de proyecto
+const sucios=new Set(); let tGuardar;
+const vaciar=()=>{clearTimeout(tGuardar);sucios.forEach(p=>{if(proyectos.includes(p))DB.put(p)});sucios.clear()};
+const marcar=proj=>{proj.rev=Math.max(Date.now(),(proj.rev||0)+1,(proj.sincRev||0)+1);sucios.add(proj);clearTimeout(tGuardar);tGuardar=setTimeout(vaciar,300);if(proj===P)pintarCompartir()};
+const guardar=()=>marcar(P);
+const recordarUltimo=()=>{try{localStorage.setItem('visor-ultimo',P.id)}catch(_){}};
+class VisorError extends Error{}
 
 /* ======================= imágenes ======================= */
 function leerImagen(file,max=1080){
@@ -296,7 +347,12 @@ function leerImagen(file,max=1080){
 }
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const bg=src=>src?`background-image:url('${src}')`:'';
+// solo se aceptan imágenes de Cloudinary o incrustadas: así un link o archivo no puede colar código
+const RX_URL=/^https:\/\/res\.cloudinary\.com\/[a-z0-9_-]{1,60}\/image\/upload\/[A-Za-z0-9._~\-\/%,:]{1,400}$/;
+const RX_DATA=/^data:image\/(?:png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+\/]+={0,2}$/;
+const imgOk=u=>(typeof u==='string'&&(RX_URL.test(u)||RX_DATA.test(u)))?u:'';
+const esLocal=u=>typeof u==='string'&&u.startsWith('data:');
+const bg=src=>{const u=imgOk(src);return u?`background-image:url('${u}')`:''};
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1800)}
 
 /* ======================= orden de publicaciones ======================= */
@@ -313,7 +369,7 @@ function htmlTelefono(modo,titulo){
   const vis=ps.slice(0,n);
   const pubs=f.pubs||String(ps.length);
   const btns=(f.botones||'').split(',').map(s=>s.trim()).filter(Boolean);
-  let cells=vis.map(p=>`<div class="cell" draggable="true" data-id="${p.id}" style="${bg(p.img)}">
+  let cells=vis.map(p=>`<div class="cell" draggable="true" data-id="${esc(p.id)}" style="${bg(p.img)}">
       ${p.fijado?badge('pin'):p.tipo==='carrusel'?badge('carr'):p.tipo==='reel'?badge('reel'):''}
       ${p.propuesta&&modo!=='actual'&&ui.tag==='si'?'<span class="nuevo">NUEVA</span>':''}</div>`).join('');
   const faltan=(ui.show==='all'?(3-vis.length%3)%3:n-vis.length);
@@ -355,7 +411,7 @@ function enganchesGrilla(){
       e.preventDefault();c.classList.remove('target');
       const destino=P.posts.find(p=>p.id===c.dataset.id);
       if(e.dataTransfer.files&&e.dataTransfer.files.length){
-        destino.img=await leerImagen(e.dataTransfer.files[0]);toast('Imagen reemplazada');
+        destino.img=await leerImagen(e.dataTransfer.files[0]);encolarSi(P,destino,'img');toast('Imagen reemplazada');
       }else if(dragId&&dragId!==destino.id){
         moverPost(dragId,destino.id);
       }
@@ -379,7 +435,7 @@ function abrirPost(id){
   const p=P.posts.find(x=>x.id===id), f=P.perfil;
   $('#postBox').className='post '+(ui.ph==='dark'?'ph-dark':'');
   $('#postBox').innerHTML=`<div class="h"><div class="mini" style="${bg(f.avatar)}"></div>${esc(f.usuario)}${f.verif?VERIF:''}<button class="x" id="xPost">×</button></div>
-    <img src="${p.img}" style="--pratio:${ui.ratio==='1/1'?'1/1':'4/5'}" alt="">
+    <img src="${imgOk(p.img)}" style="--pratio:${ui.ratio==='1/1'?'1/1':'4/5'}" alt="">
     <div class="acts">${ic('heart')}${ic('comment')}${ic('send')}<span class="r">${ic('save')}</span></div>
     <div class="txt"><b>${esc(f.usuario)}</b>${esc(p.desc||'')}</div>
     <div class="when">${p.fijado?'📌 Fijada · ':''}${p.propuesta?'Propuesta':'Publicada'}</div>`;
@@ -401,13 +457,13 @@ function cargarPerfil(){
 }
 const pedirAvatar=()=>$('#fAvatar').click();
 $('#bAvatar').onclick=pedirAvatar; $('#avEdit').onclick=pedirAvatar;
-$('#fAvatar').onchange=async e=>{if(!e.target.files[0])return;P.perfil.avatar=await leerImagen(e.target.files[0],400);e.target.value='';guardar();render()};
+$('#fAvatar').onchange=async e=>{if(!e.target.files[0])return;P.perfil.avatar=await leerImagen(e.target.files[0],400);encolarSi(P,P.perfil,'avatar');e.target.value='';guardar();render()};
 
 /* ======================= panel: destacadas ======================= */
 let hlTarget=null;
 function renderDestacadas(){
   $('#hList').innerHTML=P.destacadas.map((h,i)=>`<div class="hitem">
-    ${h.img?`<img src="${h.img}" data-i="${i}" class="hlimg" alt="">`:`<div class="ph hlimg" data-i="${i}"></div>`}
+    ${imgOk(h.img)?`<img src="${imgOk(h.img)}" data-i="${i}" class="hlimg" alt="">`:`<div class="ph hlimg" data-i="${i}"></div>`}
     <input type="text" value="${esc(h.titulo)}" data-i="${i}" class="hlt">
     <div class="row" style="justify-content:center;margin-top:3px">
       <button class="btn sm" data-mv="${i}" data-d="-1">◀</button><button class="btn sm dan" data-rm="${i}">✕</button><button class="btn sm" data-mv="${i}" data-d="1">▶</button></div></div>`).join('');
@@ -417,7 +473,7 @@ function renderDestacadas(){
   $('#hList').querySelectorAll('[data-mv]').forEach(e=>e.onclick=()=>{const i=+e.dataset.mv,j=i+ +e.dataset.d;if(j<0||j>=P.destacadas.length)return;[P.destacadas[i],P.destacadas[j]]=[P.destacadas[j],P.destacadas[i]];guardar();render()});
 }
 $('#bAddHl').onclick=()=>{P.destacadas.push({img:'',titulo:'Nueva'});guardar();render()};
-$('#fHl').onchange=async e=>{if(!e.target.files[0]||hlTarget==null)return;P.destacadas[hlTarget].img=await leerImagen(e.target.files[0],300);e.target.value='';guardar();render()};
+$('#fHl').onchange=async e=>{if(!e.target.files[0]||hlTarget==null)return;const h=P.destacadas[hlTarget];if(!h)return;h.img=await leerImagen(e.target.files[0],300);encolarSi(P,h,'img');e.target.value='';guardar();render()};
 
 /* ======================= panel: publicaciones ======================= */
 async function agregarArchivos(files){
@@ -427,6 +483,7 @@ async function agregarArchivos(files){
   }
   // las recién subidas quedan arriba (la primera del lote queda más reciente)
   P.posts.unshift(...nuevas);
+  nuevas.forEach(p=>encolarSi(P,p,'img'));
   guardar();render();toast(nuevas.length+' imagen(es) agregada(s)');
 }
 const drop=$('#drop');
@@ -438,18 +495,19 @@ drop.addEventListener('drop',e=>{e.preventDefault();agregarArchivos(e.dataTransf
 
 let repTarget=null;
 const fRep=document.createElement('input');fRep.type='file';fRep.accept='image/*';
-fRep.onchange=async()=>{if(!fRep.files[0]||!repTarget)return;repTarget.img=await leerImagen(fRep.files[0]);fRep.value='';guardar();render()};
+fRep.onchange=async()=>{if(!fRep.files[0]||!repTarget)return;repTarget.img=await leerImagen(fRep.files[0]);encolarSi(P,repTarget,'img');fRep.value='';guardar();render()};
 
 function renderLista(){
   const ps=ordenados('propuesta');
   $('#pCount').textContent=`(${P.posts.length})`;
-  $('#pList').innerHTML=ps.map((p,i)=>`<div class="pitem" data-id="${p.id}">
-    <img src="${p.img}" alt="" draggable="true" data-id="${p.id}" class="pimg" title="Arrastra para reordenar">
+  $('#pList').innerHTML=ps.map((p,i)=>`<div class="pitem" data-id="${esc(p.id)}">
+    <img src="${imgOk(p.img)}" alt="" draggable="true" data-id="${esc(p.id)}" class="pimg" title="Arrastra para reordenar">
     <div class="meta">
       <div class="row">
         <span class="tag">#${i+1}</span>
         ${p.fijado?'<span class="tag pin">📌 fijada</span>':''}
         ${p.propuesta?'<span class="tag new">propuesta</span>':''}
+        <span class="tag st" data-st="${esc(p.id)}"></span>
         <span style="flex:1"></span>
         <select data-k="tipo"><option value="foto">Foto</option><option value="carrusel">Carrusel</option><option value="reel">Reel</option></select>
       </div>
@@ -496,25 +554,383 @@ function moverAntes(a,b){
   P.posts.splice(P.posts.indexOf(a),1); P.posts.splice(P.posts.indexOf(b),0,a);
 }
 
+/* ======================= guardar en línea (Cloudinary) ======================= */
+// Nube del equipo ya configurada: cualquiera que abra el visor puede subir imágenes.
+// Solo se usan el "cloud name" y un preset sin firma; la API Secret de Cloudinary nunca se usa.
+const NUBE_EQUIPO={cloud:'xwak6fqd',preset:'visor_instagram_loteria'};
+const LS_NUBE='visor-nube', LS_AUTO='visor-nube-auto';
+const RX_CLOUD=/^[a-z0-9][a-z0-9_-]{1,59}$/, RX_PRESET=/^[A-Za-z0-9_-]{1,100}$/;
+const nubeOk=n=>!!(n&&typeof n==='object'&&RX_CLOUD.test(n.cloud)&&RX_PRESET.test(n.preset));
+const nubePropia=()=>{try{const n=JSON.parse(localStorage.getItem(LS_NUBE)||'null');return nubeOk(n)?{cloud:n.cloud,preset:n.preset}:null}catch(_){return null}};
+const getNube=()=>nubePropia()||NUBE_EQUIPO;
+const setNube=n=>{try{n?localStorage.setItem(LS_NUBE,JSON.stringify({cloud:n.cloud,preset:n.preset})):localStorage.removeItem(LS_NUBE)}catch(_){}};
+const autoSubir=()=>$('#autoSubir').checked;
+const API_NUBE=c=>'https://api.cloudinary.com/v1_1/'+encodeURIComponent(c)+'/image';
+// estado de cada imagen, sin guardarlo: objeto -> {campo:{src,estado,msg}}
+const estadoSubida=new WeakMap();
+// cola por imagen (no por casilla): la misma imagen usada dos veces o en una copia se sube una sola vez
+const cola=[], enVuelo=new Set(); let activos=0; const alTerminar=[];
+function slots(proj){
+  const s=[];
+  if(proj.perfil.avatar)s.push([proj.perfil,'avatar']);
+  proj.destacadas.forEach(h=>{if(h.img)s.push([h,'img'])});
+  proj.posts.forEach(p=>{if(p.img)s.push([p,'img'])});
+  return s;
+}
+function est(obj,campo){const m=estadoSubida.get(obj);return m&&m[campo]&&m[campo].src===obj[campo]?m[campo]:null}
+function ponerEst(obj,campo,v){let m=estadoSubida.get(obj);if(!m){m={};estadoSubida.set(obj,m)}m[campo]=v}
+function quitarEst(obj,campo,src){const m=estadoSubida.get(obj);if(m&&m[campo]&&m[campo].src===src)delete m[campo]}
+const usada=src=>proyectos.some(p=>slots(p).some(([o,c])=>o[c]===src));
+
+function traducirError(m,st){
+  m=String(m||'');
+  if(/preset.*not found/i.test(m))return 'no existe ese upload preset (o no está en modo «Unsigned»)';
+  if(/whitelist|unsigned/i.test(m))return 'el upload preset debe estar en modo «Unsigned»';
+  if(/cloud.?name|unknown cloud/i.test(m)||st===404)return 'ese cloud name no existe';
+  if(/file size|too large|exceed/i.test(m))return 'la imagen es demasiado pesada para el preset';
+  if(/format/i.test(m))return 'el preset no permite ese formato';
+  if(st===420||st===429)return 'Cloudinary pidió esperar un momento';
+  return 'Cloudinary no aceptó la imagen'+(m?' ('+m.slice(0,80)+')':'');
+}
+async function subirNube(dataUrl,extra,n=getNube()){
+  const fd=new FormData(); fd.append('file',dataUrl); fd.append('upload_preset',n.preset);
+  if(extra)for(const k in extra)fd.append(k,extra[k]);
+  let r; try{r=await fetch(API_NUBE(n.cloud)+'/upload',{method:'POST',body:fd})}catch(_){throw new VisorError('sin conexión con Cloudinary')}
+  let j=null; try{j=await r.json()}catch(_){}
+  if(!r.ok||!j||!j.secure_url)throw new VisorError(traducirError(j&&j.error&&j.error.message,r.status));
+  const url=imgOk(j.secure_url);
+  if(!url||esLocal(url))throw new VisorError('Cloudinary respondió algo inesperado');
+  return {url};
+}
+// prueba una nube subiendo siempre el mismo punto de 1x1 (si ya existe, Cloudinary no lo duplica)
+async function probarNube(n){
+  const gif='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  try{await subirNube(gif,{public_id:'visor-prueba-conexion',tags:'visor-prueba'},n);return {ok:true}}
+  catch(err){
+    const m=err instanceof VisorError?err.message:'no se pudo probar';
+    if(/public.?id/i.test(m)){try{await subirNube(gif,{tags:'visor-prueba'},n);return {ok:true}}catch(e2){return {ok:false,msg:e2 instanceof VisorError?e2.message:m}}}
+    return {ok:/conexión/.test(m)?null:false,msg:m};
+  }
+}
+function encolar(proj,obj,campo){
+  const src=obj[campo]; if(!esLocal(src))return;
+  const e=est(obj,campo); if(e&&e.estado==='subiendo')return;
+  ponerEst(obj,campo,{src,estado:'subiendo'});
+  if(!enVuelo.has(src)){enVuelo.add(src);cola.push(src);bombear()}
+  pintarEstados();
+}
+const encolarSi=(proj,obj,campo)=>{if(autoSubir())encolar(proj,obj,campo)};
+function terminarSiLibre(){if(!activos&&!cola.length)alTerminar.splice(0).forEach(f=>f())}
+function bombear(){
+  while(activos<2&&cola.length){
+    const src=cola.shift();
+    if(!usada(src)){enVuelo.delete(src);continue} // la quitaron o la cambiaron mientras esperaba
+    activos++;
+    subirNube(src,{tags:'visor-instagram'}).then(r=>{
+      // la URL reemplaza a la imagen local en todos los proyectos que la usan (los borrados ya no están)
+      const tocar=new Set();
+      proyectos.forEach(p=>slots(p).forEach(([o,c])=>{if(o[c]===src){o[c]=r.url;quitarEst(o,c,src);tocar.add(p)}}));
+      tocar.forEach(p=>marcar(p));
+    }).catch(err=>{
+      const msg=err instanceof VisorError?err.message:'error inesperado';
+      proyectos.forEach(p=>slots(p).forEach(([o,c])=>{if(o[c]===src)ponerEst(o,c,{src,estado:'error',msg})}));
+      avisarError(msg);
+    }).finally(()=>{enVuelo.delete(src);activos--;pintarEstados();bombear()});
+  }
+  terminarSiLibre();
+}
+const esperarCola=()=>new Promise(r=>{if(!activos&&!cola.length)r();else alTerminar.push(r)});
+let ultimoAviso=0;
+function avisarError(m){const t=Date.now();if(t-ultimoAviso>4000){ultimoAviso=t;toast('No se subió: '+m)}}
+function subirPendientes(proj=P){slots(proj).forEach(([o,c])=>{if(esLocal(o[c]))encolar(proj,o,c)})}
+function pendientes(proj=P){return slots(proj).filter(([o,c])=>esLocal(o[c]))}
+function reintentarErrores(proj=P){pendientes(proj).forEach(([o,c])=>{const e=est(o,c);if(e&&e.estado==='error')ponerEst(o,c,null)})}
+function pintarEstados(){
+  if(!P)return;
+  document.querySelectorAll('.tag.st[data-st]').forEach(el=>{
+    const p=P.posts.find(x=>x.id===el.dataset.st); if(!p)return;
+    const e=est(p,'img'); let cls,txt,tit='';
+    if(e&&e.estado==='subiendo'){cls='subiendo';txt='⏳ subiendo…';tit='Subiendo a la nube del equipo'}
+    else if(e&&e.estado==='error'){cls='error';txt='⚠ no se subió';tit='No se subió: '+(e.msg||'error')+'. Clic para reintentar.'}
+    else if(esLocal(p.img)){cls='local';txt='💻 solo en este equipo';tit='Todavía no está en la nube. Clic para subirla.'}
+    else{cls='nube';txt='☁ en la nube';tit='Guardada en la nube del equipo (Cloudinary)'}
+    el.className='tag st '+cls; el.textContent=txt; el.title=tit;
+    el.onclick=(cls==='error'||cls==='local')?()=>{ponerEst(p,'img',null);encolar(P,p,'img')}:null;
+  });
+  const loc=pendientes(), total=slots(P).length;
+  const sub=loc.filter(([o,c])=>{const e=est(o,c);return e&&e.estado==='subiendo'}).length;
+  const err=loc.filter(([o,c])=>{const e=est(o,c);return e&&e.estado==='error'}).length;
+  $('#nubeEstado').textContent=sub?`subiendo ${sub}…`:err?`${err} con error`:loc.length?`${loc.length} sin subir`:(total?'todo en la nube ✓':'');
+  $('#pendInfo').textContent=sub?`Subiendo ${sub} imagen(es)…`:err?`${err} no se pudieron subir; revisa la conexión y aprieta «Subir pendientes».`
+    :loc.length?`${loc.length} imagen(es) solo en este equipo.`:(total?'Todas las imágenes están en la nube.':'');
+  $('#bSubirPend').disabled=!loc.length||sub===loc.length;
+  const n=getNube(), propia=!!nubePropia();
+  $('#nubeActual').textContent=propia?`Usando tu nube «${n.cloud}» (preset ${n.preset}).`:`Usando la nube del equipo («${n.cloud}»).`;
+  $('#bNubeEquipo').disabled=!propia;
+}
+function pedirNube(){const d=$('#secNube');d.open=true;d.scrollIntoView({behavior:'smooth',block:'start'});$('#bSubirPend').focus()}
+try{const a=localStorage.getItem(LS_AUTO);if(a!==null)$('#autoSubir').checked=a==='1'}catch(_){}
+$('#autoSubir').onchange=e=>{try{localStorage.setItem(LS_AUTO,e.target.checked?'1':'0')}catch(_){};if(e.target.checked)subirPendientes()};
+['#nCloud','#nPreset'].forEach(s=>$(s).addEventListener('keydown',e=>{if(e.key==='Enter')$('#bNube').click()}));
+$('#bNube').onclick=async()=>{
+  const b=$('#bNube'); if(b.disabled)return;
+  const n={cloud:$('#nCloud').value.trim().toLowerCase(),preset:$('#nPreset').value.trim()};
+  if(!RX_CLOUD.test(n.cloud)){toast('Revisa el cloud name: solo letras minúsculas, números y guiones');return}
+  if(!RX_PRESET.test(n.preset)){toast('Revisa el nombre del upload preset');return}
+  b.disabled=true;b.textContent='Probando…';
+  const r=await probarNube(n);
+  b.disabled=false;b.textContent='Probar y guardar';
+  if(r.ok===false){toast('Cloudinary: '+r.msg);return}
+  setNube(n); toast(r.ok?'Nube conectada ✓':'Guardada (no se pudo probar ahora: '+r.msg+')');
+  pintarEstados(); if(autoSubir())subirPendientes();
+};
+$('#bNubeEquipo').onclick=()=>{setNube(null);$('#nCloud').value='';$('#nPreset').value='';pintarEstados();toast('Volviste a la nube del equipo')};
+$('#bSubirPend').onclick=()=>{reintentarErrores();subirPendientes()};
+
+/* ======================= compartir por link ======================= */
+const b64u={
+  enc(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')},
+  dec(str){let s;try{s=atob(str.replace(/-/g,'+').replace(/_/g,'/'))}catch(_){throw new VisorError('el link está incompleto')}const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return b}
+};
+// lee un flujo con tope de tamaño (un link no puede inflarse hasta colgar el navegador)
+async function leerTope(stream,tope){
+  const r=stream.getReader(), partes=[]; let n=0;
+  for(;;){
+    let x; try{x=await r.read()}catch(_){throw new VisorError('el link está dañado')}
+    if(x.done)break;
+    n+=x.value.length; if(n>tope){try{r.cancel()}catch(_){}throw new VisorError('el link es demasiado grande')}
+    partes.push(x.value);
+  }
+  const out=new Uint8Array(n); let o=0; for(const p of partes){out.set(p,o);o+=p.length}
+  return out;
+}
+async function comprimir(txt){
+  const bytes=new TextEncoder().encode(txt);
+  try{
+    if(typeof CompressionStream==='function'){
+      const st=new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+      return 'z'+b64u.enc(await leerTope(st,5e7));
+    }
+  }catch(_){}
+  return 'j'+b64u.enc(bytes);
+}
+async function descomprimir(code){
+  if(code.length>500000) throw new VisorError('el link es demasiado largo');
+  const bytes=b64u.dec(code.slice(1));
+  if(code[0]==='j') return new TextDecoder().decode(bytes);
+  if(code[0]!=='z') throw new VisorError('el link no es de este visor');
+  let ds=null; try{ds=new DecompressionStream('deflate-raw')}catch(_){}
+  if(!ds) throw new VisorError('este navegador es demasiado antiguo para abrir links del visor (en iPhone o iPad se necesita iOS 16.4 o superior). Pide el proyecto como archivo exportado');
+  const st=new Blob([bytes]).stream().pipeThrough(ds);
+  return new TextDecoder().decode(await leerTope(st,8e6));
+}
+// versiones: cada vez que se comparte algo nuevo nace una versión (vid) que recuerda sus anteriores (hist).
+// Así se sabe si un link es más nuevo, más antiguo o paralelo sin depender del reloj de cada computador.
+const cambiosLocales=p=>(p.rev||0)>(p.sincRev||0);
+// al compartir o exportar: si hubo cambios nace una versión nueva; si no, se reutiliza la misma
+function fijarVersion(proj){
+  vaciar();
+  if(cambiosLocales(proj)||!proj.vid){const v=uid();proj.hist=[v,...(proj.hist||[])].slice(0,30);proj.vid=v}
+  proj.sincRev=proj.rev; DB.put(proj);
+}
+// punto en «Compartir link» cuando hay cambios que el equipo todavía no ve
+function pintarCompartir(){
+  const b=$('#bShare'); if(!b||!P)return;
+  const pend=cambiosLocales(P)||!P.vid;
+  b.classList.toggle('pend',pend);
+  b.title=pend?'Hay cambios que el equipo todavía no ve: comparte un link nuevo':'El último link compartido ya tiene todo';
+}
+function paraCompartir(proj){
+  const f=proj.perfil;
+  return {v:3,sid:proj.sid,vid:proj.vid||null,hist:(proj.hist||[]).slice(0,30),nombre:proj.nombre,ui:{...ui},
+    perfil:{usuario:f.usuario,nombre:f.nombre,avatar:f.avatar,aro:!!f.aro,verif:!!f.verif,pubs:f.pubs,seguidores:f.seguidores,seguidos:f.seguidos,cat:f.cat,bio:f.bio,enlace:f.enlace,botones:f.botones,azul:!!f.azul},
+    destacadas:proj.destacadas.map(h=>({img:h.img,titulo:h.titulo})),
+    posts:proj.posts.map(p=>({id:p.id,img:p.img,desc:p.desc,tipo:p.tipo,fijado:!!p.fijado,propuesta:!!p.propuesta}))};
+}
+// todo lo que llega de un link, de un archivo o del almacenamiento se revisa campo por campo
+const txt=(v,max)=>typeof v==='string'?v.slice(0,max):'';
+const RX_ID=/^[a-z0-9]{4,40}$/i;
+function sanear(d,origen){
+  if(!d||typeof d!=='object'||!d.perfil||typeof d.perfil!=='object'||!Array.isArray(d.posts)) throw new VisorError('no trae un perfil');
+  // un link solo puede traer imágenes que ya están en la nube; un archivo puede traerlas incrustadas
+  const img=origen==='link'?(u=>{const x=imgOk(u);return esLocal(x)?'':x}):imgOk;
+  const f=d.perfil;
+  const p={id:uid(),sid:(typeof d.sid==='string'&&RX_ID.test(d.sid))?d.sid:uid(),
+    vid:(typeof d.vid==='string'&&RX_ID.test(d.vid))?d.vid:null,
+    hist:(Array.isArray(d.hist)?d.hist:[]).filter(x=>typeof x==='string'&&RX_ID.test(x)).slice(0,30),
+    nombre:txt(d.nombre,80).trim()||'Perfil compartido',creado:Date.now(),
+    perfil:{usuario:txt(f.usuario,60),nombre:txt(f.nombre,80),avatar:img(f.avatar),aro:f.aro!==false,verif:!!f.verif,
+      pubs:txt(f.pubs,20),seguidores:txt(f.seguidores,20),seguidos:txt(f.seguidos,20),cat:txt(f.cat,60),
+      bio:txt(f.bio,500),enlace:txt(f.enlace,120),botones:txt(f.botones,120),azul:f.azul!==false},
+    destacadas:(Array.isArray(d.destacadas)?d.destacadas:[]).slice(0,30).filter(h=>h&&typeof h==='object').map(h=>({img:img(h.img),titulo:txt(h.titulo,30)})),
+    posts:[]};
+  if(p.vid&&!p.hist.includes(p.vid))p.hist.unshift(p.vid);
+  let fij=0; const ids=new Set();
+  for(const x of d.posts.slice(0,300)){
+    if(!x||typeof x!=='object')continue;
+    const im=img(x.img); if(!im)continue;
+    const id=(typeof x.id==='string'&&RX_ID.test(x.id)&&!ids.has(x.id))?x.id:uid(); ids.add(id);
+    const fijado=!!x.fijado&&fij<3; if(fijado)fij++;
+    p.posts.push({id,img:im,desc:txt(x.desc,2200),tipo:['foto','carrusel','reel'].includes(x.tipo)?x.tipo:'foto',fijado,propuesta:!!x.propuesta});
+  }
+  if(d.ui&&typeof d.ui==='object')Object.defineProperty(p,'ui',{value:d.ui,enumerable:false});
+  const t=Date.now(); p.rev=t; p.sincRev=t;
+  return p;
+}
+// proyectos ya guardados en este navegador: se revisan igual, conservando su identidad y versión
+function limpiarGuardado(x){
+  try{
+    const p=sanear(x,'local');
+    if(typeof x.id==='string'&&x.id.length<=60)p.id=x.id;
+    p.creado=Number.isFinite(x.creado)?x.creado:Date.now();
+    p.rev=Number.isFinite(x.rev)?x.rev:p.creado;
+    p.sincRev=Number.isFinite(x.sincRev)?x.sincRev:0;   // versión anterior del visor: se considera sin compartir
+    return p;
+  }catch(_){return null}
+}
+// llega un proyecto (link o archivo): se compara su historia con la copia que ya existe
+async function recibirProyecto(d,origen){
+  vaciar();
+  const ex=proyectos.find(x=>x.sid===d.sid);
+  const de=origen==='link'?'el link':'el archivo';
+  let destino=null, mostrado=true; // mostrado = la pantalla queda con la versión que trae el link
+  const nuevo=()=>{proyectos.push(d);DB.put(d);return d};
+  const reemplazar=()=>{const t=Date.now();Object.assign(ex,{nombre:d.nombre,perfil:d.perfil,destacadas:d.destacadas,posts:d.posts,vid:d.vid,hist:d.hist,rev:t,sincRev:t});DB.put(ex);return ex};
+  const copia=()=>{d.sid=uid();d.vid=null;d.hist=[];d.sincRev=0;d.nombre=(d.nombre+' (copia)').slice(0,80);return nuevo()};
+  if(!ex){
+    const q=proyectos.length===1?proyectos[0]:null;
+    if(q&&!q.posts.length&&!q.vid&&q.rev===q.creado){proyectos.splice(0,1);sucios.delete(q);DB.del(q.id)}
+    destino=nuevo();toast(origen==='link'?`Abriste «${d.nombre}»`:'Proyecto importado');
+  }
+  else if(d.vid&&d.vid===ex.vid){
+    destino=ex; toast(cambiosLocales(ex)?'Ya tenías esta versión (y tienes cambios sin compartir)':'Ya tenías esta versión');
+  }
+  else if(d.vid&&ex.vid&&d.hist.includes(ex.vid)&&!cambiosLocales(ex)){
+    destino=reemplazar(); toast('Actualizado a la versión más nueva');
+  }
+  else{
+    const antiguo=!!(d.vid&&(ex.hist||[]).includes(d.vid));
+    const texto=antiguo
+      ?[`${de[0].toUpperCase()+de.slice(1)} trae una versión ANTERIOR a la que ya tienes de «${ex.nombre}».`,'Lo normal es quedarte con la tuya.']
+      :cambiosLocales(ex)
+        ?[`Tu copia de «${ex.nombre}» tiene cambios que no has compartido.`,`¿Qué hacemos con la versión que trae ${de}?`]
+        :[`Tu copia de «${ex.nombre}» y la de ${de} se modificaron por separado.`,`¿Qué hacemos con la versión que trae ${de}?`];
+    const op=await dialogo({titulo:antiguo?'Este link es más antiguo':'Ya tienes este perfil',texto,
+      botones:[['cancelar',antiguo?'Quedarme con la mía':'Cancelar'],['copia','Abrir como copia aparte'],['reemplazar',antiguo?'Reemplazar por la antigua':'Reemplazar mi copia']]});
+    if(op==='copia'){destino=copia();toast('Abierto como copia aparte')}
+    else if(op==='reemplazar'){destino=reemplazar();toast('Reemplazado por la versión de '+de)}
+    else{destino=ex;mostrado=false}
+  }
+  P=destino; recordarUltimo(); render(true);
+  if(autoSubir())subirPendientes();
+  return mostrado;
+}
+async function revisarHash(){
+  const m=/^#p=([A-Za-z0-9_-]+)$/.exec(location.hash);
+  if(!m)return;
+  try{history.replaceState(null,'',location.href.split('#')[0])}catch(_){}
+  let d;
+  try{d=sanear(JSON.parse(await descomprimir(m[1])),'link')}
+  catch(err){alert('No se pudo abrir el link compartido: '+(err instanceof VisorError?err.message:'está incompleto o dañado')+'.');return}
+  if(await recibirProyecto(d,'link')&&d.ui){aplicarUI(d.ui);guardarUI();pintarSegmentos();renderTelefonos()}
+}
+window.addEventListener('hashchange',revisarHash);
+
+/* ======================= diálogo simple ======================= */
+// el foco queda en la primera opción (la que no borra nada): un Enter apurado nunca descarta trabajo
+function dialogo({titulo,texto,link,botones}){
+  return new Promise(res=>{
+    const d=$('#dlg'), b=d.querySelector('.box'); b.textContent='';
+    const h=document.createElement('h3'); h.textContent=titulo; b.appendChild(h);
+    (Array.isArray(texto)?texto:[texto]).filter(Boolean).forEach(t=>{const p=document.createElement('p');p.textContent=t;b.appendChild(p)});
+    let ta=null;
+    if(link){ta=document.createElement('textarea');ta.readOnly=true;ta.value=link;ta.setAttribute('aria-label','Link');b.appendChild(ta)}
+    const row=document.createElement('div'); row.className='row';
+    const cerrar=k=>{d.classList.remove('on');document.removeEventListener('keydown',tecla,true);d.onclick=null;res(k)};
+    const tecla=e=>{if(e.key==='Escape'){e.stopPropagation();e.preventDefault();cerrar('cancelar')}};
+    botones.forEach(([k,t,pri])=>{
+      const x=document.createElement('button'); x.className='btn'+(pri?' pri':''); x.textContent=t;
+      x.onclick=async()=>{if(k==='copiar'){x.textContent=(await copiar(link,ta))?'¡Copiado!':'Cópialo a mano';return}cerrar(k)};
+      row.appendChild(x);
+    });
+    b.appendChild(row);
+    document.addEventListener('keydown',tecla,true);
+    d.onclick=e=>{if(e.target===d)cerrar('cancelar')};
+    d.classList.add('on');
+    if(ta){ta.focus();ta.select()}else row.firstChild.focus();
+  });
+}
+async function copiar(t,ta){
+  try{await navigator.clipboard.writeText(t);return true}
+  catch(_){if(ta){ta.focus();ta.select();try{return document.execCommand('copy')}catch(__){}}return false}
+}
+$('#bShare').onclick=async()=>{
+  const btn=$('#bShare'); if(btn.disabled)return;
+  const proj=P;
+  if(pendientes(proj).length){
+    btn.disabled=true; btn.textContent='Subiendo imágenes…';
+    reintentarErrores(proj); subirPendientes(proj); await esperarCola();
+    btn.disabled=false; btn.textContent='Compartir link';
+    const quedan=pendientes(proj).length;
+    if(quedan){alert(`No se pudieron subir ${quedan} imagen(es) a la nube. Revisa la conexión y vuelve a apretar «Compartir link».`);return}
+    if(!proyectos.includes(proj))return;
+  }
+  fijarVersion(proj); pintarCompartir();
+  const url=location.href.split('#')[0]+'#p='+await comprimir(JSON.stringify(paraCompartir(proj)));
+  const largo=url.length>8000?'El link es largo: si tu chat lo corta, usa «Exportar archivo».':'';
+  copiar(url).then(ok=>{if(ok)toast('Link copiado')});
+  dialogo({titulo:'Link para compartir',
+    texto:['Quien abra este link verá el perfil tal como está ahora, con sus imágenes en la nube.','Si cambias algo, vuelve a apretar «Compartir link» para generar uno nuevo.',largo],
+    link:url,botones:[['cerrar','Cerrar'],['copiar','Copiar link',true]]});
+};
+
+/* ======================= varias pestañas abiertas ======================= */
+// si el visor está abierto en otra pestaña, cada una toma lo que guarda la otra en vez de pisarlo
+const canal=(()=>{try{return new BroadcastChannel('visor-perfil')}catch(_){return null}})();
+if(canal)canal.onmessage=async e=>{
+  const m=e.data; if(!m||typeof m!=='object'||typeof m.id!=='string')return;
+  if(m.tipo==='borrado'){
+    const i=proyectos.findIndex(p=>p.id===m.id); if(i<0)return;
+    sucios.delete(proyectos[i]); proyectos.splice(i,1);
+    if(!proyectos.length){const p=nuevoProyecto('Mi perfil');proyectos.push(p);DB.put(p)}
+    if(!proyectos.includes(P))P=proyectos[0];
+    render(true); return;
+  }
+  if(m.tipo==='guardado'){
+    const x=await DB.get(m.id); if(!x)return;
+    const fresco=limpiarGuardado(x); if(!fresco)return;
+    const i=proyectos.findIndex(p=>p.id===m.id);
+    if(i>=0&&sucios.has(proyectos[i]))return; // esta pestaña tiene cambios propios sin guardar de ese proyecto
+    if(i>=0)proyectos[i]=fresco;else proyectos.push(fresco);
+    const actual=P&&P.id===m.id; if(actual)P=fresco;
+    const enfocado=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.panel');
+    if(document.hidden||!enfocado)render(true);else{renderProyectos();renderTelefonos();pintarEstados()}
+    if(actual&&!document.hidden)toast('Este perfil se actualizó en otra pestaña');
+  }
+};
+
 /* ======================= proyectos ======================= */
 function renderProyectos(){
   $('#selProj').innerHTML=proyectos.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
   $('#selProj').value=P.id;
 }
-$('#selProj').onchange=e=>{P=proyectos.find(p=>p.id===e.target.value);try{localStorage.setItem('visor-ultimo',P.id)}catch(_){}render(true)};
-$('#bNewProj').onclick=()=>{const n=prompt('Nombre del proyecto (ej: Kino – noviembre):','Perfil nuevo');if(!n)return;const p=nuevoProyecto(n);proyectos.push(p);P=p;DB.put(p);render(true)};
-$('#bDupProj').onclick=()=>{const c=JSON.parse(JSON.stringify(P));c.id=uid();c.nombre=P.nombre+' (versión B)';proyectos.push(c);P=c;DB.put(c);render(true);toast('Duplicado')};
-$('#bDelProj').onclick=()=>{if(!confirm(`¿Borrar el proyecto "${P.nombre}"? No se puede deshacer.`))return;DB.del(P.id);proyectos=proyectos.filter(p=>p!==P);if(!proyectos.length){proyectos=[nuevoProyecto()];DB.put(proyectos[0])}P=proyectos[0];render(true)};
+$('#selProj').onchange=e=>{P=proyectos.find(p=>p.id===e.target.value);recordarUltimo();render(true);if(autoSubir())subirPendientes()};
+$('#bNewProj').onclick=()=>{const n=prompt('Nombre del proyecto (ej: Kino – noviembre):','Perfil nuevo');if(!n)return;const p=nuevoProyecto(n.slice(0,80));proyectos.push(p);P=p;DB.put(p);recordarUltimo();render(true)};
+$('#bRenProj').onclick=()=>{const n=prompt('Nuevo nombre del proyecto:',P.nombre);if(n==null)return;const t=n.trim().slice(0,80);if(!t)return;P.nombre=t;guardar();renderProyectos();toast('Proyecto renombrado')};
+$('#bDupProj').onclick=()=>{vaciar();const c=JSON.parse(JSON.stringify(P));c.id=uid();c.sid=uid();c.vid=null;c.hist=[];c.sincRev=0;c.rev=Date.now();c.creado=c.rev;c.nombre=P.nombre+' (versión B)';proyectos.push(c);P=c;DB.put(c);recordarUltimo();render(true);toast('Duplicado')};
+$('#bDelProj').onclick=()=>{if(!confirm(`¿Borrar el proyecto "${P.nombre}"? No se puede deshacer.`))return;sucios.delete(P);DB.del(P.id);proyectos=proyectos.filter(p=>p!==P);if(!proyectos.length){proyectos=[nuevoProyecto()];DB.put(proyectos[0])}P=proyectos[0];render(true)};
 $('#bExport').onclick=()=>{
-  const blob=new Blob([JSON.stringify({visor:1,proyecto:P})],{type:'application/json'});
+  fijarVersion(P); pintarCompartir();
+  const blob=new Blob([JSON.stringify({visor:3,proyecto:paraCompartir(P)})],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(P.nombre||'perfil').replace(/[^\w\-áéíóúñ ]/gi,'_')+'.json';a.click();URL.revokeObjectURL(a.href);
 };
 $('#bImport').onclick=()=>$('#fImport').click();
 $('#fImport').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;e.target.value='';
-  try{const d=JSON.parse(await f.text());const p=d.proyecto||d;if(!p.perfil||!p.posts)throw 0;
-    p.id=uid();proyectos.push(p);P=p;DB.put(p);render(true);toast('Proyecto importado')}
-  catch(_){alert('El archivo no es un proyecto válido del visor.')}
+  let p;
+  try{const d=JSON.parse(await f.text());p=sanear(d&&d.proyecto||d,'archivo')}
+  catch(err){alert('El archivo no es un proyecto válido del visor'+(err instanceof VisorError?': '+err.message:'')+'.');return}
+  await recibirProyecto(p,'archivo');
 };
 
 /* ======================= barra superior ======================= */
@@ -523,12 +939,30 @@ function segmento(id,key,attr){
   s.querySelectorAll('button').forEach(b=>{b.classList.toggle('on',b.dataset[attr]===ui[key]);
     b.onclick=()=>{ui[key]=b.dataset[attr];guardarUI();s.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));renderTelefonos()}});
 }
-segmento('#segView','vista','v');segmento('#segRatio','ratio','r');segmento('#segPh','ph','p');segmento('#segShow','show','s');segmento('#segTag','tag','t');
+const SEGS=[['#segView','vista','v'],['#segRatio','ratio','r'],['#segPh','ph','p'],['#segShow','show','s'],['#segTag','tag','t']];
+SEGS.forEach(([id,k,a])=>segmento(id,k,a));
+function pintarSegmentos(){SEGS.forEach(([id,k,a])=>$(id).querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset[a]===ui[k])))}
+// las imágenes en línea se traen como copia local para que el generador pueda dibujarlas
+async function urlABlob(u){
+  try{const r=await fetch(u,{mode:'cors',credentials:'omit'});if(r.ok){const b=await r.blob();if(/^image\//.test(b.type))return URL.createObjectURL(b)}}catch(_){}
+  return null;
+}
+const urlDeEstilo=el=>{const m=/url\(["']?(https:[^"')]+)/.exec(el.getAttribute('style')||'');return m?m[1]:null};
 $('#bShot').onclick=async()=>{
   if(!window.html2canvas){alert('No se pudo cargar el generador de imágenes (revisa la conexión).');return}
+  const btn=$('#bShot');if(btn.disabled)return;btn.disabled=true;
   toast('Generando imagen…');
-  const c=await html2canvas($('#frames'),{backgroundColor:null,scale:2});
-  const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=(P.nombre||'perfil')+'_'+ui.vista+'.png';a.click();
+  const frames=$('#frames'), mapa=new Map(), urls=new Set();
+  frames.querySelectorAll('[style*="background-image"]').forEach(el=>{const u=urlDeEstilo(el);if(u)urls.add(u)});
+  try{
+    await Promise.all([...urls].map(async u=>{const b=await urlABlob(u);if(b)mapa.set(u,b)}));
+    const c=await html2canvas(frames,{backgroundColor:null,scale:2,useCORS:true,onclone:doc=>{
+      doc.querySelectorAll('[style*="background-image"]').forEach(el=>{const u=urlDeEstilo(el);if(u&&mapa.has(u))el.style.backgroundImage=`url("${mapa.get(u)}")`});
+    }});
+    const a=document.createElement('a');a.href=c.toDataURL('image/png');a.download=(P.nombre||'perfil').replace(/[\\\/:*?"<>|]/g,'_')+'_'+ui.vista+'.png';a.click();
+    const faltan=urls.size-mapa.size; if(faltan)toast(faltan+' imagen(es) no se pudieron incluir');
+  }catch(err){alert('No se pudo generar la imagen. Intenta de nuevo.')}
+  finally{mapa.forEach(b=>URL.revokeObjectURL(b));btn.disabled=false}
 };
 $('#bTheme').onclick=()=>{
   const r=document.documentElement, cur=r.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
@@ -540,18 +974,22 @@ try{const t=localStorage.getItem('visor-tema');if(t)document.documentElement.dat
 function render(full){
   if(full){cargarPerfil();renderProyectos()}
   $('#avEditIn').style.cssText=bg(P.perfil.avatar);
-  renderDestacadas();renderLista();renderTelefonos();
+  renderDestacadas();renderLista();renderTelefonos();pintarEstados();pintarCompartir();
 }
 (async()=>{
   await DB.open();
   proyectos=await DB.all();
+  // lo guardado también se revisa (versiones anteriores del visor o datos dañados)
+  proyectos=proyectos.map(x=>{const p=limpiarGuardado(x);if(p&&JSON.stringify(p)!==JSON.stringify(x))DB.put(p);return p}).filter(Boolean);
   proyectos.sort((a,b)=>(a.creado||0)-(b.creado||0));
   if(!proyectos.length){proyectos=[nuevoProyecto('Mi perfil')];DB.put(proyectos[0])}
   let ult=null;try{ult=localStorage.getItem('visor-ultimo')}catch(_){}
   P=proyectos.find(p=>p.id===ult)||proyectos[0];
   render(true);
+  await revisarHash(); // ¿se abrió con un link compartido?
+  if(autoSubir())subirPendientes();
 })();
-window.addEventListener('beforeunload',()=>{clearTimeout(tGuardar);DB.put(P)});
+window.addEventListener('beforeunload',vaciar);
 </script>
 </body>
 </html>
